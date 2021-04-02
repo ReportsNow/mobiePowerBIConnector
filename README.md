@@ -2,6 +2,9 @@
 
 This document provides information on the use of the ReportsNow mobie custom connector for Microsoft Power BI. This connector allows users to connect to specific mobie created DataBox snapshots by using the name of the report and yielding data using column caption names defined for the mobie export.
 
+If you simply wish to use the connector without building it yourself, you may download a pre-built version from the following location:
+https://reportsnow.com/downloads/mobiePowerBIConnector.zip.
+
 ## Building the Connector
 
 To use the connector, you will need to build it for which you will need the following prerequisites:
