@@ -20,14 +20,14 @@
     <ExtensionProject>Yes</ExtensionProject>
     <Name>mobie</Name>
     <ThrowOnFoldingFailure>False</ThrowOnFoldingFailure>
+	<MakePQXPath>C:\Tools\MakePQX</MakePQXPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>false</DebugSymbols>
     <!--Should be true, fix this when the debugger is implemented -->
     <OutputPath>bin\Debug\</OutputPath>
     <CertificateFile>CodeSigning.pfx</CertificateFile>
-    <CertificatePassword>
-    </CertificatePassword>
+    <CertificatePassword>test</CertificatePassword>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <DebugSymbols>false</DebugSymbols>
@@ -35,6 +35,9 @@
     <CertificateFile>CodeSigning.pfx</CertificateFile>
     <CertificatePassword>
     </CertificatePassword>
+  </PropertyGroup>
+  <PropertyGroup>
+    <CertPasswordArg Condition=" $(CertificatePassword) != '' ">-p $(CertificatePassword)</CertPasswordArg>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
@@ -111,7 +114,7 @@
     <Copy SourceFiles="@(NonPQFiles)" DestinationFolder="$(IntermediateOutputPath)" />
     <Copy SourceFiles="@(PQFiles)" DestinationFiles="@(PQFiles->'$(IntermediateOutputPath)%(RecursiveDir)%(FileName).m')" />
     <BuildExtension InputDirectory="$(IntermediateOutputPath)" OutputFile="$(OutputPath)\$(ProjectName).mez" />
-    <Exec Command="MakePQX.exe pack -mz $(OutputPath)\$(ProjectName).mez -c $(CertificateFile) $(CertificatePassword) -t $(OutDir)\$(ProjectName).pqx" />
+    <Exec Command="$(MakePQXPath)\MakePQX.exe pack -mz $(OutputPath)\$(ProjectName).mez -c $(CertificateFile) $(CertPasswordArg) -t $(OutDir)\$(ProjectName).pqx" />
   </Target>
   <Target Name="ExtensionClean">
     <!-- Remove obj folder -->

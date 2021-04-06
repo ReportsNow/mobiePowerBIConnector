@@ -2,8 +2,8 @@
 
 This document provides information on the use of the ReportsNow mobie custom connector for Microsoft Power BI. This connector allows users to connect to specific mobie created DataBox snapshots by using the name of the report and yielding data using column caption names defined for the mobie export.
 
-If you simply wish to use the connector without building it yourself, you may download a pre-built version from the following location:
-https://reportsnow.com/downloads/mobiePowerBIConnector.zip.
+If you simply wish to use the connector without building it yourself, you may download a pre-built version signed by ReportsNow from the releases section of this project:
+https://github.com/ReportsNow/mobiePowerBIConnector/releases.
 
 ## Building the Connector
 
@@ -15,13 +15,16 @@ To use the connector, you will need to build it for which you will need the foll
 
 * The PowerQuery SDK available from https://docs.microsoft.com/en-us/power-query/installingsdk
 
-* The MakePQX tool for Power BI connector signing available from https://aka.ms/makepqx. 
+* The MakePQX tool for Power BI connector signing available from https://aka.ms/makepqx. The project files assume the location of MakePQX to be in C:\Tools\MakePQX, but this is configurable.
 
 Steps to build the connector are as follows:
 
-* Run the "GenerateCert.ps1" PowerShell script. This script will generate a self-signed code signing certificate to use in signing the connector and place it in your user certificate store. It will prompt for the name of the certificate and a password to use for the CodeSigning.pfx file that is generated.
+* Run the "GenerateCert.ps1" PowerShell script. This script will generate a self-signed code signing certificate to use in signing the connector and place it in your user certificate store.
+It will prompt for the name of the certificate and a password to use for the CodeSigning.pfx file that is generated. Debug builds assume the password to be "test", though this can be specified differently.
 
-* Run "msbuild /p:CertificatePassword="-p \<password\>"" from a Visual Studio developer command prompt. Substitute the password that you specified for the code signing certificate for \<password\> in the command.
+* Run "msbuild mobie.sln" from a Visual Studio developer command prompt. If you placed the MakePQX executable somewhere other than C:\Tools\MakePQX, you will need to specify that path with the MakePQXPath build variable.
+For example, "msbuild /p:MakePQXPath=C:\some\other\dir mobie.sln". If you specified a certificate file password other than "test" for a debug build, you will also need to specify the password with the
+CertificatePassword build variable. For example, "msbuild /p:MakePQXPath=C:\some\other\dir /p:CertificatePassword=MyPassword mobie.sln".
 
 The resulting connector can be found in mobie\bin\Debug\mobie.pqx and an installer to place it in the correct user directory can be found in Installer\bin\Debug\mobieConnector.msi.
 
