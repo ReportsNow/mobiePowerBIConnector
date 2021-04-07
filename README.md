@@ -1,13 +1,15 @@
 # mobie® Power BI Custom Connector
 
-This document provides information on the use of the ReportsNow mobie custom connector for Microsoft Power BI. This connector allows users to connect to specific mobie created DataBox snapshots by using the name of the report and yielding data using column caption names defined for the mobie export.
+This document provides information on the use of the ReportsNow mobie custom connector for Microsoft Power BI. mobie produces snapshots of data from Data Access Studio into a database it manages called a DataBox.
+This connector allows users to connect to specific snapshots of data by using the name of the Data Access Studio report that produced them and yielding data using column caption names defined in the original report.
 
 If you simply wish to use the connector without building it yourself, you may download a pre-built version signed by ReportsNow from the releases section of this project:
 https://github.com/ReportsNow/mobiePowerBIConnector/releases.
 
 ## Building the Connector
 
-To use the connector, you will need to build it for which you will need the following prerequisites:
+If you wish to build your own version of the connector as opposed to using the pre-built versions found in the releases section,
+you will need the following prerequisites:
 
 * A version of Visual Studio (build has only been validated on Visual Studio 2019).
 
@@ -35,16 +37,17 @@ Two files are relevant for the installation:
 * mobieConnector.msi
 * TrustedThumbprint.ps1
 
-The first is an MSI installer that can be used by users to place the mobie Custom Connector in the appropriate Power BI user connector folder. Because Power BI only allows Microsoft certified connectors to load by default, there are two options for enabling the use of the connector:
+The first is an MSI installer that can be used by users to place the mobie Custom Connector in the appropriate Power BI user connector folder. Because Power BI only allows Microsoft certified connectors
+to load by default, there are two options for enabling the use of the connector:
 
 1)	In Power BI security options (arrived at by going to “File->Options and settings->Options” and then selecting “Security”, change the “Data Extensions” setting to allow any extension:
 
 ![](doc/DataExtensions.png)
 
-2)	Use the TrustedThumbprint.ps1 PowerShell script to set a registry entry (HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Power BI Desktop\TrustedCertificateThumbprints) to include the signing certificate thumbprint of the connector. To do this, run ".\TrustedThumbprint.ps1 -SelfSigned true"
-    from a PowerShell command prompt. If you obtained the pre-built version of the connector from ReportsNow signed with the ReportsNow signing certificate, simply run ".\TrustedThumbprint.ps1" from a PowerShell command prompt and the
-    ReportsNow certificate thumbprint ('1f1c059074762b49a97d6ce5c975a0a5e81bab5f') will be added. Using the script to add the registry key is the preferred mechanism for trusting the connector, but does require administrative rights to edit
-    the registry.
+2)	Use the TrustedThumbprint.ps1 PowerShell script to set a registry entry (HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Power BI Desktop\TrustedCertificateThumbprints) to include the signing certificate
+thumbprint of the connector. To do this, run ".\TrustedThumbprint.ps1 -SelfSigned true" from a PowerShell command prompt. If you obtained the pre-built version of the connector from ReportsNow signed with
+the ReportsNow signing certificate, simply run ".\TrustedThumbprint.ps1" from a PowerShell command prompt and the ReportsNow certificate thumbprint ('1f1c059074762b49a97d6ce5c975a0a5e81bab5f') will be added.
+Using the script to add the registry key is the preferred mechanism for trusting the connector, but does require administrative rights to edit the registry.
 
 ## Connecting to Data
 
@@ -67,8 +70,10 @@ The first time that you connect, you will also be asked for permissions to use t
 
 ![](doc/DataBoxPermissions.png)
 
-You can either use Windows credentials for SQL Server or Basic (user name and password authentication) for either SQL Server or Oracle. In either case, you need to supply credentials that have the necessary permissions to access the DataBox database.
-Click on OK and you will be presented with a complete list of snapshots available in the specified DataBox database. The names are listed in the form \<Report Name\>, \<Data Name\>, \<Snapshot Name\>:
+You can either use Windows credentials for SQL Server or Basic (user name and password authentication) for either SQL Server or Oracle. In either case, you need to supply credentials that have
+the necessary permissions to access the DataBox database. Note that when using Data Access Studio and mobie, access to DataBox database data snapshots is controlled by the application. When using
+this Power BI connector, access must be granted directly to the database to use the connector. Click on OK and you will be presented with a complete list of snapshots available in the specified DataBox database.
+The names are listed in the form \<Report Name\>, \<Data Name\>, \<Snapshot Name\>:
 
 ![](doc/Navigator.png)
 
