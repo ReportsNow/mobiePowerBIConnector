@@ -25,10 +25,10 @@ $RegKey = Get-Item $RegKeyName
 $RegValue = $RegKey.GetValue("TrustedCertificateThumbprints")
 
 if ($null -eq $RegValue) {
-  New-ItemProperty -Path $RegKeyName -Name "TrustedCertificateThumbprints" -Value @( "$SelfSignedThumbprint" ) -PropertyType MultiString
+  New-ItemProperty -Path $RegKeyName -Name "TrustedCertificateThumbprints" -Value @( "$Thumbprint" ) -PropertyType MultiString
 } else {
-  if (!($RegValue -contains "$SelfSignedThumbprint")) {
-    $RegValue += "$SelfSignedThumbprint"
+  if (!($RegValue -contains "$Thumbprint")) {
+    $RegValue += "$Thumbprint"
     Set-ItemProperty -Path $RegKeyName -Name "TrustedCertificateThumbprints" -Value $RegValue
   }
 }
