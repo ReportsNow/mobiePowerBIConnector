@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-	<Product Id="{E4527BF9-0609-492E-8B57-95D97C51B99F}" Name="mobie(r) Power Query Connector" Language="1033" Version="1.0.0.2" Manufacturer="ReportsNow" UpgradeCode="05a72c58-25fe-4244-aff3-d3a81fde6569">
+	<Product Id="{33D64687-0C43-490B-9E83-2A54A68C6AEE}" Name="mobie(r) Power Query Connector" Language="1033" Version="1.0.0.3" Manufacturer="ReportsNow" UpgradeCode="05a72c58-25fe-4244-aff3-d3a81fde6569">
 		<Package InstallerVersion="200" Compressed="yes" InstallScope="perUser" />
 
 		<MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
