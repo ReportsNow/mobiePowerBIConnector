@@ -73,6 +73,10 @@ mobieType = type function (
 	DataBoxSchemaName as (type text meta [
 		Documentation.FieldCaption = "Schema Name",
 		Documentation.SampleValues = { "dbo" }
+	]),
+	FDASPROPName as (type text meta [
+		Documentation.FieldCaption = "FDASPROP Table Name",
+		Documentation.SampleValues = { "Blank for default FDASPROP" }
 	]))
 	as table meta [
 		Documentation.Name = "mobie® DataBox",
