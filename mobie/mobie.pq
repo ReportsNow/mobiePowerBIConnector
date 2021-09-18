@@ -4,23 +4,35 @@ section mobie;
 [DataSource.Kind="mobie", Publish="mobie.Publish"]
 shared mobie.Contents = Value.ReplaceType(mobieImpl, mobieType);
 
-mobieImpl = (DatabaseType as text, ServerName as text, Database as text, DataBoxSchemaName as text) =>
-    let
+mobieImpl = (DatabaseType as text, ServerName as text, Database as text, DataBoxSchemaName as text, FDASPROPName as text) =>
+let
 		Provider =
 			if DatabaseType = "SQL Server" then
 				"System.Data.SqlClient"
 			else if DatabaseType = "Oracle" then
 				"Oracle.DataAccess.Client"
 			else
-				"Unknown",
+				error "Unknown database type",
 		ConnectionString =
 			if DatabaseType = "SQL Server" then
 				"data source=" & ServerName & ";initial catalog=" & Database
 			else
 				"data source=" & ServerName,
-  		dbo_FDASPROP = AdoDotNet.Query(Provider, ConnectionString, "select * from " & DataBoxSchemaName & ".FDASPROP"),
-		DataBoxTableRows = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 42))[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB]],
-		RenamedDataBoxTableColumns = Table.RenameColumns(DataBoxTableRows,{{"DPFBDINIKY","DataBoxSnapshot"},{"DPCDNAME","ReportId"},{"DPGTBLOB","DataBoxTableBlob"}}),
+		FDASPROPResolved =
+			if Text.Length(Text.Trim(FDASPROPName)) = 0 then
+				"FDASPROP"
+			else
+				FDASPROPName,
+  		dbo_FDASPROP = AdoDotNet.Query(Provider, ConnectionString, "select * from " & DataBoxSchemaName & "." & FDASPROPResolved),
+		TableFilterOption = try AdoDotNet.Query(Provider, ConnectionString, "select Value from rn__Options where Name = 'PowerBIShowAllTables'"),
+		MobieIdentity = GetMobieIdentity(Provider, ConnectionString, DatabaseType, dbo_FDASPROP),
+		DataBoxTableRows = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 42))[[DPAUSR],[DPFBDINIKY],[DPCDNAME],[DPGTBLOB]],
+		DataBoxTableRowsFiltered =
+			if TableFilterOption[HasError] = false and Table.RowCount(TableFilterOption[Value]) = 1 and TableFilterOption[Value]{0}[Value] = "1" then
+				Table.RemoveColumns(DataBoxTableRows, {"DPAUSR"})
+			else
+				Table.SelectRows(DataBoxTableRows, each ([DPAUSR] = MobieIdentity))[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB]],
+		RenamedDataBoxTableColumns = Table.RenameColumns(DataBoxTableRowsFiltered,{{"DPFBDINIKY","DataBoxSnapshot"},{"DPCDNAME","ReportId"},{"DPGTBLOB","DataBoxTableBlob"}}),
 		ExtractedSnapshotName = Table.SplitColumn(RenamedDataBoxTableColumns, "DataBoxSnapshot", Splitter.SplitTextByEachDelimiter({"#(tab)"}, QuoteStyle.Csv, false), {"SnapshotName", "DataBoxName"}),
 		TrimmedNames = Table.TransformColumns(ExtractedSnapshotName,{{"DataBoxName", Text.Trim, type text},{"ReportId", Text.Trim, type text}}),
 		FilteredDataBoxTableRows = TrimmedNames,
@@ -41,9 +53,9 @@ mobieImpl = (DatabaseType as text, ServerName as text, Database as text, DataBox
 		TableIds = Table.SelectRows(ExpandedDataBoxTableXmlProperties, each [PropertyAttributeName] = "TableId"),
 		RenamedDataBoxTableProperties = Table.RenameColumns(TableIds, {{"PropertyText","TableId"}}),
 		RnTableIds = Table.RemoveColumns(RenamedDataBoxTableProperties,{"PropertyAttributeName", "PropertyNestedValue", "PropertyAttributeValue"}),
-		NavTable = CreateNavTable(RnTableIds, ExpandedDataBoxTableXmlProperties, Provider, ConnectionString, DataBoxSchemaName)
-	in
-		NavTable;
+		NavTable = CreateNavTable(RnTableIds, ExpandedDataBoxTableXmlProperties, Provider, ConnectionString, DataBoxSchemaName, FDASPROPResolved)
+in
+    NavTable;
 
 mobieType = type function (
 	DatabaseType as (type text meta [
@@ -67,6 +79,41 @@ mobieType = type function (
 		Documentation.LongDescription = "Returns a table of all DataBox tables stored in the specified DataBox database"
 	];
 		
+GetMobieIdentity = (Provider as text, ConnectionString as text, DatabaseType as text, dbo_FDASPROP as table) =>
+    let
+  		SessionUser =
+			if DatabaseType = "SQL Server" then
+				AdoDotNet.Query(Provider, ConnectionString, "select UPPER(TRIM(SYSTEM_USER)) as UserName"){0}[UserName]
+			else
+				AdoDotNet.Query(Provider, ConnectionString, "select UPPER(TRIM(SYS_CONTEXT('USERENV', 'SESSION_USER'))) as USERNAME FROM DUAL"){0}[USERNAME],
+		MobieIdentityRows = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 53 and Text.Trim([DPFBDINIKY]) = SessionUser))[[DPAUSR]],
+		MobieIdentity =
+			if Table.RowCount(MobieIdentityRows) = 0 then 
+				error "No matching mobie identity found for " & SessionUser
+			else
+				MobieIdentityRows{0}[DPAUSR]
+    in
+        MobieIdentity;
+
+GetSecurityAssociations = (Provider as text, ConnectionString as text, DataBoxSchemaName as text) as table =>
+    let
+        dbo_FDASPROP = AdoDotNet.Query(Provider, ConnectionString, "select * from " & DataBoxSchemaName & ".FDASPROP"),
+        MobieUserRecords = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 52 and [DPAUSR] <> "DAS_PUBLIC"))[[DPAUSR],[DPGTBLOB]],
+        Decode = (_) => BinaryFormat.Text(Binary.Length(_))(_),
+        DecodedMobieUserBlob = Table.TransformColumns(MobieUserRecords, {{"DPGTBLOB", each Xml.Tables(Decode(Binary.Decompress(_, Compression.GZip)))}}),
+        UserAndSecurityAssociationTable = Table.TransformColumns(DecodedMobieUserBlob, {{"DPGTBLOB", each Table.SelectRows(_[property]{0}, each ([#"Attribute:name"] = "SecurityAssociations"))[property]{0}}}),
+        ExpandedAssociations = Table.ExpandTableColumn(UserAndSecurityAssociationTable,"DPGTBLOB",{"property"}),
+        DbNullsHandled = Table.TransformColumns(ExpandedAssociations, {{"property", each Table.CombineColumns(_,{"Element:Text","Attribute:type"}, (ColList) => if ColList{1} = "System.DBNull" then null else ColList{0}, "Value")}}),
+        PivotedAssociations = Table.TransformColumns(DbNullsHandled, {{"property", each Table.Pivot(_,{"Name","TypeName","Value"},"Attribute:name","Value")}}),
+        UserAndSecurityAssociations = Table.ExpandTableColumn(PivotedAssociations,"property",{"Name","TypeName","Value"}),
+        MobieIdentityRecords = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 53))[[DPAUSR],[DPFBDINIKY]],
+        IdentityAndSecurityAssociations = Table.Join(UserAndSecurityAssociations, "DPAUSR", MobieIdentityRecords, "DPAUSR"),
+        SecurityAssociationsRenamed = Table.RenameColumns(IdentityAndSecurityAssociations,{{"DPFBDINIKY", "Identity"},{"Name","SecurityAssociation"}}),
+        SecurityAssociationsUnpivoted = Table.RemoveColumns(SecurityAssociationsRenamed, {"DPAUSR", "TypeName"}),
+        SecurityAssociations = Table.Pivot(SecurityAssociationsUnpivoted, List.Distinct(Table.Column(SecurityAssociationsUnpivoted, "SecurityAssociation")), "SecurityAssociation", "Value")
+    in
+        SecurityAssociations;
+
 GetDataBoxTable = (reportId as text, tableId as text, dataBoxProperties as table, Provider as text, ConnectionString as text, DataBoxSchemaName as text) as table =>
 	let
 		base = AdoDotNet.Query(Provider, ConnectionString, "select * from " & DataBoxSchemaName & ".rn_" & tableId),
@@ -93,12 +140,15 @@ GetDataBoxTable = (reportId as text, tableId as text, dataBoxProperties as table
 	in
 	    FinalTable;
 
-CreateNavTable = (base as table, dataBoxProperties as table, Provider as text, ConnectionString as text, DataBoxSchemaName as text) as table =>
+CreateNavTable = (base as table, dataBoxProperties as table, Provider as text, ConnectionString as text, DataBoxSchemaName as text, FDASPROPName as text) as table =>
+(base as table, dataBoxProperties as table, Provider as text, ConnectionString as text, DataBoxSchemaName as text) as table =>
     let
 		withData = Table.AddColumn(base, "Data", each (GetDataBoxTable([ReportId], [TableId], dataBoxProperties, Provider, ConnectionString, DataBoxSchemaName)), type table),
 		withNames = Table.CombineColumns(withData, { "ReportName", "DataName", "SnapshotName" }, Combiner.CombineTextByDelimiter(", "), "Name"),
 		change1 = Table.RemoveColumns(withNames, {"DataBoxName", "TableId", "ReportId"}),
-        withItemKind = Table.AddColumn(change1, "ItemKind", each "Table", type text),
+        wrappedAssociations = Table.FromRecords({[Name = "Security Associations", Data = GetSecurityAssociations(Provider, ConnectionString, DataBoxSchemaName, FDASPROPName)]}),
+        withAssociations = Table.InsertRows(change1, 0, wrappedAssociations),
+        withItemKind = Table.AddColumn(withAssociations, "ItemKind", each "Table", type text),
         withItemName = Table.AddColumn(withItemKind, "ItemName", each "Table", type text),
         withIsLeaf = Table.AddColumn(withItemName, "IsLeaf", each true, type logical),
  		navTable = Table.ToNavigationTable(withIsLeaf, {"Name"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
@@ -136,9 +186,10 @@ mobie = [
 			DatabaseType = json[DatabaseType],
 			ServerName = json[ServerName],
 			Database = json[Database],
-			DataBoxSchemaName = json[DataBoxSchemaName]
+			DataBoxSchemaName = json[DataBoxSchemaName],
+			FDASPROPName = json[FDASPROPName]
 		in
-			{ "mobie.Contents", DatabaseType, ServerName, Database, DataBoxSchemaName },
+			{ "mobie.Contents", DatabaseType, ServerName, Database, DataBoxSchemaName, FDASPROPName },
     Authentication = [
         UsernamePassword = [],
         Windows = []
