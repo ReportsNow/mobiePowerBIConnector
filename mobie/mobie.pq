@@ -26,28 +26,28 @@ mobieImpl = (DatabaseType as text, ServerName as text, Database as text, DataBox
   		dbo_FDASPROP = AdoDotNet.Query(Provider, ConnectionString, "select * from " & DataBoxSchemaName & "." & FDASPROPResolved),
 		TableFilterOption = try AdoDotNet.Query(Provider, ConnectionString, "select Value from rn__Options where Name = 'PowerBIShowAllTables'"),
 		MobieIdentity = GetMobieIdentity(Provider, ConnectionString, DatabaseType, dbo_FDASPROP),
-		DataBoxTableRows = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 42))[[DPAUSR],[DPFBDINIKY],[DPCDNAME],[DPGTBLOB]],
+		DataBoxTableRows = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 42))[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB],[DPUSER],[DPUPMJ],[DPUPMT]],
+		DataBoxTableRowsSorted = Table.Sort(DataBoxTableRows, {{"DPUPMJ", Order.Descending}, {"DPUPMT", Order.Descending}})[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB],[DPUSER]],
 		DataBoxTableRowsFiltered =
 			if TableFilterOption[HasError] = false and Table.RowCount(TableFilterOption[Value]) = 1 and TableFilterOption[Value]{0}[Value] = "1" then
-				Table.RemoveColumns(DataBoxTableRows, {"DPAUSR"})
+				Table.RemoveColumns(DataBoxTableRowsSorted, {"DPUSER"})
 			else
-				Table.SelectRows(DataBoxTableRows, each ([DPAUSR] = MobieIdentity))[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB]],
+				Table.SelectRows(DataBoxTableRowsSorted, each ([DPUSER] = MobieIdentity))[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB]],
 		RenamedDataBoxTableColumns = Table.RenameColumns(DataBoxTableRowsFiltered,{{"DPFBDINIKY","DataBoxSnapshot"},{"DPCDNAME","ReportId"},{"DPGTBLOB","DataBoxTableBlob"}}),
 		ExtractedSnapshotName = Table.SplitColumn(RenamedDataBoxTableColumns, "DataBoxSnapshot", Splitter.SplitTextByEachDelimiter({"#(tab)"}, QuoteStyle.Csv, false), {"SnapshotName", "DataBoxName"}),
 		TrimmedNames = Table.TransformColumns(ExtractedSnapshotName,{{"DataBoxName", Text.Trim, type text},{"ReportId", Text.Trim, type text}}),
 		FilteredDataBoxTableRows = TrimmedNames,
 		Decode = (_) => BinaryFormat.Text(Binary.Length(_))(_),
-		ReportDataSourceRows = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 49))[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB]],
-		RenamedReportDataSourceColumns = Table.RenameColumns(ReportDataSourceRows,{{"DPFBDINIKY", "ReportName"}, {"DPCDNAME", "ReportId"}, {"DPGTBLOB", "ReportDataSourceBlob"}}),
-		TrimmedReportNames = Table.TransformColumns(RenamedReportDataSourceColumns,{{"ReportName", Text.Trim, type text},{"ReportId", Text.Trim, type text}}),
+		ReportDataSourceRows = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 49))[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB],[DPAUSR]],
+		RenamedReportDataSourceColumns = Table.RenameColumns(ReportDataSourceRows,{{"DPFBDINIKY", "ReportName"}, {"DPCDNAME", "ReportId"}, {"DPAUSR", "ReportOwner"}, {"DPGTBLOB", "ReportDataSourceBlob"}}),
+		TrimmedReportNames = Table.TransformColumns(RenamedReportDataSourceColumns,{{"ReportName", Text.Trim, type text},{"ReportId", Text.Trim, type text},{"ReportOwner", Text.Trim, type text}}),
 		DecodedReportDataSourceBlob = Table.TransformColumns(TrimmedReportNames, {{"ReportDataSourceBlob", each Xml.Tables(Decode(Binary.Decompress(_, Compression.GZip)))}}),
 		ExpandedReportDataSourceTopProperty = Table.ExpandTableColumn(DecodedReportDataSourceBlob, "ReportDataSourceBlob", {"property"}, {"ReportDataSourceBlob.property"}),
 		ExpandedReportDataSourceXmlProperties = Table.ExpandTableColumn(ExpandedReportDataSourceTopProperty, "ReportDataSourceBlob.property",{"Element:Text", "Attribute:name"}, {"ReportDataSourceAttributeValue", "ReportDataSourceAttributeName"}),
 		RemovedReportDataSourceColumns = Table.RemoveColumns(ExpandedReportDataSourceXmlProperties, {"ReportDataSourceAttributeName"}),
 		RenamedReportDataSourceProperties = Table.RenameColumns(RemovedReportDataSourceColumns,{{"ReportDataSourceAttributeValue","DataName"}}),
 		JoinedRows = Table.Join(FilteredDataBoxTableRows, "ReportId", RenamedReportDataSourceProperties, "ReportId"),
-		DistinctJoinedRows = Table.Distinct(JoinedRows, { "ReportName", "DataName" }),
-		DecodedDataBoxTableBlob = Table.TransformColumns(DistinctJoinedRows, {{"DataBoxTableBlob", each Xml.Tables(Decode(Binary.Decompress(_, Compression.GZip)))}}),
+		DecodedDataBoxTableBlob = Table.TransformColumns(JoinedRows, {{"DataBoxTableBlob", each Xml.Tables(Decode(Binary.Decompress(_, Compression.GZip)))}}),
 		ExpandedDataBoxTableTopProperty = Table.ExpandTableColumn(DecodedDataBoxTableBlob, "DataBoxTableBlob", {"property"}, {"TopProperty"}),
 		ExpandedDataBoxTableXmlProperties = Table.ExpandTableColumn(ExpandedDataBoxTableTopProperty, "TopProperty", {"Element:Text", "Attribute:name", "property", "Attribute:value"}, {"PropertyText", "PropertyAttributeName", "PropertyNestedValue", "PropertyAttributeValue"}),
 		TableIds = Table.SelectRows(ExpandedDataBoxTableXmlProperties, each [PropertyAttributeName] = "TableId"),
@@ -145,10 +145,9 @@ GetDataBoxTable = (reportId as text, tableId as text, dataBoxProperties as table
 		FinalTable;
 
 CreateNavTable = (base as table, dataBoxProperties as table, Provider as text, ConnectionString as text, DataBoxSchemaName as text, FDASPROPName as text) as table =>
-(base as table, dataBoxProperties as table, Provider as text, ConnectionString as text, DataBoxSchemaName as text) as table =>
 	let
 		withData = Table.AddColumn(base, "Data", each (GetDataBoxTable([ReportId], [TableId], dataBoxProperties, Provider, ConnectionString, DataBoxSchemaName)), type table),
-		withNames = Table.CombineColumns(withData, { "ReportName", "DataName", "SnapshotName" }, Combiner.CombineTextByDelimiter(", "), "Name"),
+		withNames = Table.CombineColumns(withData, { "ReportName", "DataName", "ReportOwner", "SnapshotName" }, Combiner.CombineTextByDelimiter(", "), "Name"),
 		change1 = Table.RemoveColumns(withNames, {"DataBoxName", "TableId", "ReportId"}),
 		wrappedAssociations = Table.FromRecords({[Name = "Security Associations", Data = GetSecurityAssociations(Provider, ConnectionString, DataBoxSchemaName, FDASPROPName)]}),
 		withAssociations = Table.InsertRows(change1, 0, wrappedAssociations),
