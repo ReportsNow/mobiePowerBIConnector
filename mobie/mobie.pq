@@ -48,7 +48,7 @@ mobieImpl = (DatabaseType as text, ServerName as text, optional Database as text
 		DataBoxTableRows = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 42))[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB],[DPUSER],[DPUPMJ],[DPUPMT]],
 		DataBoxTableRowsSorted = Table.Sort(DataBoxTableRows, {{"DPUPMJ", Order.Descending}, {"DPUPMT", Order.Descending}})[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB],[DPUSER]],
 		DataBoxTableRowsFiltered =
-			if TableFilterOption[HasError] = false and Table.RowCount(TableFilterOption[Value]) = 1 and TableFilterOption[Value]{0}[Value] = "1" then
+			if TableFilterOption[HasError] = false and TableFilterOption[Value] = "1" then
 				Table.RemoveColumns(DataBoxTableRowsSorted, {"DPUSER"})
 			else
 				Table.SelectRows(DataBoxTableRowsSorted, each ([DPUSER] = MobieIdentity))[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB]],
