@@ -149,7 +149,7 @@ CreateNavTable = (base as table, dataBoxProperties as table, Provider as text, C
 		withData = Table.AddColumn(base, "Data", each (GetDataBoxTable([ReportId], [TableId], dataBoxProperties, Provider, ConnectionString, DataBoxSchemaName)), type table),
 		withNames = Table.CombineColumns(withData, { "ReportName", "DataName", "ReportOwner", "SnapshotName" }, Combiner.CombineTextByDelimiter(", "), "Name"),
 		change1 = Table.RemoveColumns(withNames, {"DataBoxName", "TableId", "ReportId"}),
-		wrappedAssociations = Table.FromRecords({[Name = "Security Associations", Data = GetSecurityAssociations(Provider, ConnectionString, DataBoxSchemaName, FDASPROPName)]}),
+		wrappedAssociations = {[Name = "Security Associations", Data = GetSecurityAssociations(Provider, ConnectionString, DataBoxSchemaName, FDASPROPName)]},
 		withAssociations = Table.InsertRows(change1, 0, wrappedAssociations),
 		withItemKind = Table.AddColumn(withAssociations, "ItemKind", each "Table", type text),
 		withItemName = Table.AddColumn(withItemKind, "ItemName", each "Table", type text),
