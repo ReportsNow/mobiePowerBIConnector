@@ -4,7 +4,7 @@ section mobie;
 [DataSource.Kind="mobie", Publish="mobie.Publish"]
 shared mobie.Contents = Value.ReplaceType(mobieImpl, mobieType);
 
-mobieImpl = (DatabaseType as text, ServerName as text, Database as text, DataBoxSchemaName as text, FDASPROPName as text) =>
+mobieImpl = (DatabaseType as text, ServerName as text, Database as text, DataBoxSchemaName as text, optional FDASPROPName as text) =>
 	let
 		Provider =
 			if DatabaseType = "SQL Server" then
@@ -19,7 +19,7 @@ mobieImpl = (DatabaseType as text, ServerName as text, Database as text, DataBox
 			else
 				"data source=" & ServerName,
 		FDASPROPResolved =
-			if Text.Length(Text.Trim(FDASPROPName)) = 0 then
+			if FDASPROPName = null or Text.Length(Text.Trim(FDASPROPName)) = 0 then
 				"FDASPROP"
 			else
 				FDASPROPName,
@@ -74,7 +74,7 @@ mobieType = type function (
 		Documentation.FieldCaption = "Schema Name",
 		Documentation.SampleValues = { "dbo" }
 	]),
-	FDASPROPName as (type text meta [
+	optional FDASPROPName as (type text meta [
 		Documentation.FieldCaption = "FDASPROP Table Name",
 		Documentation.SampleValues = { "Blank for default FDASPROP" }
 	]))
@@ -99,9 +99,9 @@ GetMobieIdentity = (Provider as text, ConnectionString as text, DatabaseType as 
 	in
 		MobieIdentity;
 
-GetSecurityAssociations = (Provider as text, ConnectionString as text, DataBoxSchemaName as text) as table =>
+GetSecurityAssociations = (Provider as text, ConnectionString as text, DataBoxSchemaName as text, FDASPROPName as text) as table =>
 	let
-		dbo_FDASPROP = AdoDotNet.Query(Provider, ConnectionString, "select * from " & DataBoxSchemaName & ".FDASPROP"),
+		dbo_FDASPROP = AdoDotNet.Query(Provider, ConnectionString, "select * from " & DataBoxSchemaName & "." & FDASPROPName),
 		MobieUserRecords = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 52 and [DPAUSR] <> "DAS_PUBLIC"))[[DPAUSR],[DPGTBLOB]],
 		Decode = (_) => BinaryFormat.Text(Binary.Length(_))(_),
 		DecodedMobieUserBlob = Table.TransformColumns(MobieUserRecords, {{"DPGTBLOB", each Xml.Tables(Decode(Binary.Decompress(_, Compression.GZip)))}}),
@@ -124,7 +124,7 @@ GetDataBoxTable = (reportId as text, tableId as text, dataBoxProperties as table
 		FilteredDataBoxProperties = Table.SelectRows(dataBoxProperties, each [ReportId] = reportId),
 		FilteredColumnTranslations = Table.SelectRows(FilteredDataBoxProperties, each [PropertyAttributeName] = "ColumnTranslations"),
 		ColumnTranslationsPlus = Table.ExpandTableColumn(FilteredColumnTranslations, "PropertyNestedValue", {"property"},{"ColumnTranslation"}),
-		ColumnTranslations = Table.RemoveColumns(ColumnTranslationsPlus, {"SnapshotName", "DataBoxName", "ReportId", "PropertyText", "PropertyAttributeName", "PropertyAttributeValue", "ReportName", "DataName" }),
+		ColumnTranslations = Table.RemoveColumns(ColumnTranslationsPlus, {"SnapshotName", "DataBoxName", "ReportId", "PropertyText", "PropertyAttributeName", "PropertyAttributeValue", "ReportName", "DataName", "ReportOwner" }),
 		SymbolMapperPivot = (_) => Table.ToRecords(Table.Pivot(_, {"FromName", "ToName"}, "Attribute:name", "Element:Text")){0},
 		PivotedColumnTranslations = Table.TransformColumns(ColumnTranslations, {{ "ColumnTranslation", SymbolMapperPivot}}),
 		ExpandedColumnTranslations = Table.ExpandRecordColumn(PivotedColumnTranslations, "ColumnTranslation", {"FromName", "ToName"}),
@@ -132,7 +132,7 @@ GetDataBoxTable = (reportId as text, tableId as text, dataBoxProperties as table
 
 		FilteredCaptionTranslations = Table.SelectRows(FilteredDataBoxProperties, each [PropertyAttributeName] = "FieldNameCaptionTranslations"),
 		CaptionTranslationsPlus = Table.ExpandTableColumn(FilteredCaptionTranslations, "PropertyNestedValue", {"property"},{"FieldNameCaptionTranslation"}),
-		CaptionTranslations = Table.RemoveColumns(CaptionTranslationsPlus, {"SnapshotName", "DataBoxName", "ReportId", "PropertyText", "PropertyAttributeName", "PropertyAttributeValue", "ReportName", "DataName" }),
+		CaptionTranslations = Table.RemoveColumns(CaptionTranslationsPlus, {"SnapshotName", "DataBoxName", "ReportId", "PropertyText", "PropertyAttributeName", "PropertyAttributeValue", "ReportName", "DataName", "ReportOwner" }),
 		PivotedCaptionTranslations = Table.TransformColumns(CaptionTranslations, {{ "FieldNameCaptionTranslation", SymbolMapperPivot}}),
 		ExpandedCaptionTranslations = Table.ExpandRecordColumn(PivotedCaptionTranslations, "FieldNameCaptionTranslation", {"FromName", "ToName"}),
 		CaptionTranslationsRenamed = Table.RenameColumns(ExpandedCaptionTranslations, {{"ToName", "Caption"}}),
