@@ -4,7 +4,7 @@ section mobie;
 [DataSource.Kind="mobie", Publish="mobie.Publish"]
 shared mobie.Contents = Value.ReplaceType(mobieImpl, mobieType);
 
-mobieImpl = (DatabaseType as text, ServerName as text, Database as text, DataBoxSchemaName as text, optional FDASPROPName as text) =>
+mobieImpl = (DatabaseType as text, ServerName as text, optional Database as text, optional DataBoxSchemaName as text, optional FDASPROPName as text) =>
 	let
 		Provider =
 			if DatabaseType = "SQL Server" then
@@ -13,18 +13,37 @@ mobieImpl = (DatabaseType as text, ServerName as text, Database as text, DataBox
 				"Oracle.DataAccess.Client"
 			else
 				error "Unknown database type",
+		CheckDatabase =
+			if Database = null then
+				error "Database name must be specified for SQL Server"
+			else
+				Database,
 		ConnectionString =
 			if DatabaseType = "SQL Server" then
-				"data source=" & ServerName & ";initial catalog=" & Database
+				"data source=" & ServerName & ";initial catalog=" & CheckDatabase
 			else
 				"data source=" & ServerName,
+		CheckSchemaName =
+			if DataBoxSchemaName = null then
+				error "Schema name must be specified for Oracle"
+			else
+				DataBoxSchemaName,
+		SchemaName =
+			if DatabaseType = "SQL Server" and DataBoxSchemaName = null then
+				"dbo"
+			else
+				CheckSchemaName,
 		FDASPROPResolved =
 			if FDASPROPName = null or Text.Length(Text.Trim(FDASPROPName)) = 0 then
 				"FDASPROP"
 			else
 				FDASPROPName,
-  		dbo_FDASPROP = AdoDotNet.Query(Provider, ConnectionString, "select * from " & DataBoxSchemaName & "." & FDASPROPResolved),
-		TableFilterOption = try AdoDotNet.Query(Provider, ConnectionString, "select Value from rn__Options where Name = 'PowerBIShowAllTables'"),
+  		dbo_FDASPROP = AdoDotNet.Query(Provider, ConnectionString, "SELECT * FROM " & SchemaName & "." & FDASPROPResolved),
+		TableFilterOption =
+			try if DatabaseType = "Oracle" then
+				AdoDotNet.Query(Provider, ConnectionString, "SELECT VALUE FROM " & SchemaName & ".RN__OPTIONS WHERE NAME = 'PowerBIShowAllTables'"){0}[VALUE]
+			else
+				AdoDotNet.Query(Provider, ConnectionString, "SELECT Value FROM " & SchemaName & ".rn__Options WHERE Name = 'PowerBIShowAllTables'"){0}[Value],
 		MobieIdentity = GetMobieIdentity(Provider, ConnectionString, DatabaseType, dbo_FDASPROP),
 		DataBoxTableRows = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 42))[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB],[DPUSER],[DPUPMJ],[DPUPMT]],
 		DataBoxTableRowsSorted = Table.Sort(DataBoxTableRows, {{"DPUPMJ", Order.Descending}, {"DPUPMT", Order.Descending}})[[DPFBDINIKY],[DPCDNAME],[DPGTBLOB],[DPUSER]],
@@ -53,7 +72,7 @@ mobieImpl = (DatabaseType as text, ServerName as text, Database as text, DataBox
 		TableIds = Table.SelectRows(ExpandedDataBoxTableXmlProperties, each [PropertyAttributeName] = "TableId"),
 		RenamedDataBoxTableProperties = Table.RenameColumns(TableIds, {{"PropertyText","TableId"}}),
 		RnTableIds = Table.RemoveColumns(RenamedDataBoxTableProperties,{"PropertyAttributeName", "PropertyNestedValue", "PropertyAttributeValue"}),
-		NavTable = CreateNavTable(RnTableIds, ExpandedDataBoxTableXmlProperties, Provider, ConnectionString, DataBoxSchemaName, FDASPROPResolved)
+		NavTable = CreateNavTable(RnTableIds, ExpandedDataBoxTableXmlProperties, Provider, ConnectionString, SchemaName, FDASPROPResolved)
 	in
 		NavTable;
 
@@ -66,13 +85,13 @@ mobieType = type function (
 		Documentation.FieldCaption = "Server Name",
 		Documentation.FieldDescription = { "DataBox database server name for connection string" }
 	]),
-	Database as (type text meta [
+	optional Database as (type text meta [
 		Documentation.FieldCaption = "Database Name",
-		Documentation.SampleValues = { "DataBox" }
+		Documentation.SampleValues = { "DataBox. Required for SQL Server. Unused for Oracle." }
 	]),
-	DataBoxSchemaName as (type text meta [
+	optional DataBoxSchemaName as (type text meta [
 		Documentation.FieldCaption = "Schema Name",
-		Documentation.SampleValues = { "dbo" }
+		Documentation.SampleValues = { "Defaults to dbo for SQL Server. Must be specified for Oracle." }
 	]),
 	optional FDASPROPName as (type text meta [
 		Documentation.FieldCaption = "FDASPROP Table Name",
@@ -87,9 +106,9 @@ GetMobieIdentity = (Provider as text, ConnectionString as text, DatabaseType as 
 	let
 		SessionUser =
 			if DatabaseType = "SQL Server" then
-				AdoDotNet.Query(Provider, ConnectionString, "select UPPER(TRIM(SYSTEM_USER)) as UserName"){0}[UserName]
+				AdoDotNet.Query(Provider, ConnectionString, "SELECT UPPER(TRIM(SYSTEM_USER)) AS UserName"){0}[UserName]
 			else
-				AdoDotNet.Query(Provider, ConnectionString, "select UPPER(TRIM(SYS_CONTEXT('USERENV', 'SESSION_USER'))) as USERNAME FROM DUAL"){0}[USERNAME],
+				AdoDotNet.Query(Provider, ConnectionString, "SELECT UPPER(TRIM(SYS_CONTEXT('USERENV', 'SESSION_USER'))) AS USERNAME FROM DUAL"){0}[USERNAME],
 		MobieIdentityRows = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 53 and Text.Trim([DPFBDINIKY]) = SessionUser))[[DPAUSR]],
 		MobieIdentity =
 			if Table.RowCount(MobieIdentityRows) = 0 then 
@@ -101,7 +120,7 @@ GetMobieIdentity = (Provider as text, ConnectionString as text, DatabaseType as 
 
 GetSecurityAssociations = (Provider as text, ConnectionString as text, DataBoxSchemaName as text, FDASPROPName as text) as table =>
 	let
-		dbo_FDASPROP = AdoDotNet.Query(Provider, ConnectionString, "select * from " & DataBoxSchemaName & "." & FDASPROPName),
+		dbo_FDASPROP = AdoDotNet.Query(Provider, ConnectionString, "SELECT * FROM " & DataBoxSchemaName & "." & FDASPROPName),
 		MobieUserRecords = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 52 and [DPAUSR] <> "DAS_PUBLIC"))[[DPAUSR],[DPGTBLOB]],
 		Decode = (_) => BinaryFormat.Text(Binary.Length(_))(_),
 		DecodedMobieUserBlob = Table.TransformColumns(MobieUserRecords, {{"DPGTBLOB", each Xml.Tables(Decode(Binary.Decompress(_, Compression.GZip)))}}),
@@ -120,7 +139,7 @@ GetSecurityAssociations = (Provider as text, ConnectionString as text, DataBoxSc
 
 GetDataBoxTable = (reportId as text, tableId as text, dataBoxProperties as table, Provider as text, ConnectionString as text, DataBoxSchemaName as text) as table =>
 	let
-		base = AdoDotNet.Query(Provider, ConnectionString, "select * from " & DataBoxSchemaName & ".rn_" & tableId),
+		base = AdoDotNet.Query(Provider, ConnectionString, "SELECT * FROM " & DataBoxSchemaName & ".rn_" & tableId),
 		FilteredDataBoxProperties = Table.SelectRows(dataBoxProperties, each [ReportId] = reportId),
 		FilteredColumnTranslations = Table.SelectRows(FilteredDataBoxProperties, each [PropertyAttributeName] = "ColumnTranslations"),
 		ColumnTranslationsPlus = Table.ExpandTableColumn(FilteredColumnTranslations, "PropertyNestedValue", {"property"},{"ColumnTranslation"}),
