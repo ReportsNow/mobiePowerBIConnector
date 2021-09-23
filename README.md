@@ -99,19 +99,27 @@ versions of the connector, but the fix is simple: simply edit the query associat
 
 You can publish a Power BI report created using the mobie connector to the Power BI service for public consumption as you would with any other data source. If you wish to set it up for automatic refresh, you will need to use a Power BI on-premises Data Gateway (see https://powerbi.microsoft.com/en-us/gateway/). There is a personal mode gateway available for development and testing purposes as well as a standard mode gateway that runs as a service on a machine to connect to your mobie DataBox. The mobie Power BI connector must be installed on the Data Gateway machine and the Connectors directory needs to point to the directory where the custom connector is installed. In this manner, the Power BI service can be configured to connect to the Data Gateway to refresh the mobie data snapshot. Note that you will also have to enter credentials in the Power BI service for the Data Gateway to use to connect to the mobie DataBox database.
 
-## Implementing Security
+## Implementing mobie Defined Row Level Security
 
 When connecting to a mobie DataBox, one table that you can load is a "Security Associations" table. This table has one column called Identity and one column for every security association defined in the
 mobie administration interface. The table contains one row for every mobie identity and the value for the associated mobie user's security associations in the columns for that row. If there are multiple identities
-for a single mobie user, there will be a row for each identity with the security association values duplicated for each identity.
+for a single mobie user, there will be a row for each identity with the security association values duplicated for each identity. An example of this table can be seen below:
+
+![](doc/SecurityAssociations.png)
 
 This table can be used to implement dynamic row level security in your Power BI visualization. For example, you may wish to restrict a user to seeing only data where a Company column matches the Company security
 association of the logged in user. To do this, use the "Manage relationships" dialog available from the Modeling tab in Power BI. In this dialog, create a new relationship with the "Security Associations" table
 and the desired data table. Select the Company column in both and pick the "Cross filter direction" to be "Single" from the "Security Associations" table to the data table. Note that the cardinality of this
-relationship will be many-to-many and you will want to make sure that the relationship is active.
+relationship will be many-to-many and you will want to make sure that the relationship is active. An example of creating this relationship is shown below:
+
+![](doc/CreateRelationship.png)
 
 Next, you will want to "Manage roles" (also from the Modeling tab) in Power BI. Here you will want to create a new role with the DAX expression of "[Identity] = USERPRINCIPALNAME()". You might call this role
-"Company Security". Now, when you publish your visualization, you also want to assign this role to any users that you publish the visualization to. In this way, it will look up their user principal name
+"Company Security". This definition is shown below:
+
+![](doc/ManageRoles.png)
+
+Now, when you publish your visualization, you also want to assign this role to any users that you publish the visualization to. In this way, it will look up their user principal name
 and match it up with the Identity column in the Security Associations table. Because there is a cross filtering relationship between the Security Associations table and your data table, the contents of the
 data table will also be filtered. Note that specifying User Principal Names (UPN) is only available in Data Access Studio beginning with build 8.0.11.1.
 
@@ -124,8 +132,11 @@ data table will also be filtered. Note that specifying User Principal Names (UPN
 * Support ability to connect to FDASPROPT test table.
 * Improve error checking of incoming options and make parameters optional that are not always required.
 * By default, users only see snapshots that they have published themselves to the mobie DataBox. To retain the past behavior of seeing all snapshots, it is necessary to create a table called rn__Options. See below for instructions.
+The table and access to it are only required if you wish to retain the legacy behavior.
 
 #### Instructions for creating rn__Options table
+
+Note that if you create user based permissions to your mobie database/schema, connecting users will also require SELECT permission to the rn__Options table.
 
 For SQL Server, you may run the following script (substituting your DataBox database name for MyDataBoxDatabase:
 
@@ -171,8 +182,6 @@ For Oracle, you may run the following script (this assumes that the mobie DataBo
 
   INSERT INTO "MOBIE"."RN__OPTIONS" (NAME, REPORTUNIQUENAME, VALUE) VALUES ('PowerBIShowAllTables', ' ', '1')
 ```
-
-Note that if you create user based permissions to your mobie database/schema, connecting users will also require SELECT permission to the rn__Options table.
 
 ### Release 1.0.0.2
 Initial version

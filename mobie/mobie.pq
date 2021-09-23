@@ -106,7 +106,7 @@ GetMobieIdentity = (Provider as text, ConnectionString as text, DatabaseType as 
 	let
 		SessionUser =
 			if DatabaseType = "SQL Server" then
-				AdoDotNet.Query(Provider, ConnectionString, "SELECT UPPER(TRIM(SYSTEM_USER)) AS UserName"){0}[UserName]
+				AdoDotNet.Query(Provider, ConnectionString, "SELECT UPPER(LTRIM(RTRIM(SYSTEM_USER))) AS UserName"){0}[UserName]
 			else
 				AdoDotNet.Query(Provider, ConnectionString, "SELECT UPPER(TRIM(SYS_CONTEXT('USERENV', 'SESSION_USER'))) AS USERNAME FROM DUAL"){0}[USERNAME],
 		MobieIdentityRows = Table.SelectRows(dbo_FDASPROP, each ([DPINTEGER] = 53 and Text.Trim([DPFBDINIKY]) = SessionUser))[[DPAUSR]],
