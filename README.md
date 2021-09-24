@@ -75,13 +75,13 @@ You can either use Windows credentials for SQL Server or Basic (user name and pa
 the necessary permissions to access the DataBox database. Note that when using Data Access Studio and mobie, access to DataBox database data snapshots is controlled by the application. When using
 this Power BI connector, access must be granted directly to the database to use the connector.
 
-Beginning with release 1.0.0.3, it is recommended that you create specific database users for each of your mobie users that will be publishing and accessing data. The database user name
+Beginning with release 1.0.3.0, it is recommended that you create specific database users for each of your mobie users that will be publishing and accessing data. The database user name
 should match one of the user identities associated with that mobie user in the mobie administration interface. For example, if you have a mobie user called TESTUSER and that user has a simple
 identity called TESTUSER associated with it, you would want to create a user called TESTUSER on your database. Windows user identities may also be used, particularly when using SQL Server.
 The TESTUSER database user should only be granted SELECT permission to the FDASPROP table in the mobie DataBox database. Beginning with build 8.0.11.1 of Data Access Studio, when TESTUSER
 publishes new data to the mobie DataBox, SELECT permission will also be granted to newly published data snapshots so that they are the only ones accessible to TESTUSER.
 
-In order to retain the behavior of the connector prior to release 1.0.0.3 that would show all available snapshots published by all users, it is necessary to set a value in a table called rn__Options
+In order to retain the behavior of the connector prior to release 1.0.3.0 that would show all available snapshots published by all users, it is necessary to set a value in a table called rn__Options
 in your mobie DataBox. See the release notes section below for details.
 
 Click on OK and you will be presented with a list of snapshots available in the specified DataBox database.
@@ -91,7 +91,7 @@ The names are listed in the form \<Report Name\>, \<Data Name\>, \<Report Owner\
 
 From here, you can select a snapshot and load it (or transform it) as you would any other Power BI data source.
 
-Beginning with release 1.0.0.3, the names displayed have changed to include the \<Report Owner\>. Typically, this will either be your mobie user name or the name DAS_PUBLIC to reference
+Beginning with release 1.0.3.0, the names displayed have changed to include the \<Report Owner\>. Typically, this will either be your mobie user name or the name DAS_PUBLIC to reference
 published reports. This change in name is necessary to be able to distinguish between a private and published report. Note that this change also breaks Power BI reports built using older
 versions of the connector, but the fix is simple: simply edit the query associated with your existing report snapshot and include the \<Report Owner\> in the referenced name.
 
@@ -125,7 +125,7 @@ data table will also be filtered. Note that specifying User Principal Names (UPN
 
 ## Release Notes
 
-### Release 1.0.0.3
+### Release 1.0.3.0
 
 * **Breaking change**: Navigation names used by the connector now include the \<Report Owner\> as part of the comma separated name to distinguish between versions of a report name owned by different users. Published reports use the name DAS_PUBLIC for the report owner. When first opening existing Power BI files with connections to mobie snapshots prior to this release, edit the query and include the report owner name in the comma separated name.
 * Security Associations table included as a mechanism to implement dynamic row level security in your Power BI report.
